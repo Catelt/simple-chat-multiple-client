@@ -3,6 +3,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 public class ClientHandler implements  Runnable{
@@ -13,16 +14,18 @@ public class ClientHandler implements  Runnable{
     private String nameClient;
     private DataInputStream dis;
     private DataOutputStream dos;
+    private String nameDirectory = "";
 
-    public  ClientHandler(Socket socket){
+    public  ClientHandler(Socket socket,String user){
         try {
             this.socket = socket;
             this.bw = new BufferedWriter(new OutputStreamWriter(this.socket.getOutputStream(),StandardCharsets.UTF_8));
             this.br = new BufferedReader(new InputStreamReader(this.socket.getInputStream(), StandardCharsets.UTF_8));
             this.dis = new DataInputStream(this.socket.getInputStream());
             this.dos = new DataOutputStream(this.socket.getOutputStream());
-            this.nameClient = br.readLine();
+            this.nameClient = user;
             listClient.add(this);
+            TimeUnit.SECONDS.sleep(1);
             sendListOnline(this.nameClient);
             sendMessengeAll("SERVER-ADD:"+this.nameClient);
             System.out.println(nameClient + " Connect");
@@ -33,6 +36,17 @@ public class ClientHandler implements  Runnable{
         }
 
     }
+
+
+    public static int checkUser(String user){
+        for(ClientHandler clientHandler : listClient) {
+            if (clientHandler.nameClient.equals(user)){
+                return 1;
+            }
+        }
+        return 0;
+    }
+
 
     @Override
     public void run(){
@@ -81,16 +95,65 @@ public class ClientHandler implements  Runnable{
                         System.out.println(name + " disconnect");
                     }
                 }
+                if(msgFromChat.contains("LOAD-FILE:")){
+                    String receiver = msgFromChat.substring(0,msgFromChat.indexOf("-"));
+                    String nameFile = msgFromChat.substring(msgFromChat.indexOf(":")+1);
+                    String[] content = loadMessenge(nameFile);
+                    for(String line: content){
+                        sendMessenge("LOADCHAT:"+line,receiver);
+                    }
+                }
                 else if(msgFromChat.contains("&&CLIENTCHAT:")){
+                    String sender = msgFromChat.substring(0,msgFromChat.indexOf(":"));
                     String receiver = msgFromChat.substring(msgFromChat.indexOf("&&CLIENTCHAT:")+13);
                     String messenge = msgFromChat.substring(0,msgFromChat.indexOf("&&CLIENTCHAT:"));
+                    saveMessenge(messenge + "\n",nameDirectory+receiver+"-"+sender+".txt");
+                    saveMessenge(messenge + "\n",nameDirectory+sender+"-"+receiver+".txt");
                     sendMessenge(messenge,receiver);
                 }
             }catch (Exception e){
-                System.out.println("Error2:" + e);
+                System.out.println("Error:" + e);
             }
         }
     }
+
+    public static void saveMessenge(String messenger , String nameFile){
+        try{
+            FileOutputStream os = new FileOutputStream(nameFile,true);
+            OutputStreamWriter osw = new OutputStreamWriter(os,StandardCharsets.UTF_8);
+            BufferedWriter br = new BufferedWriter(osw);
+            br.append(messenger);
+            br.close();
+        }
+        catch (Exception e){
+            System.out.println("Error:" + e);
+        }
+    }
+
+    public static String[] loadMessenge(String nameFile){
+        ArrayList<String> result = new ArrayList<String>();
+        try{
+            File f = new File(nameFile);
+            if(f.exists()){
+                InputStream is = new FileInputStream(nameFile);
+                InputStreamReader isr = new InputStreamReader(is,StandardCharsets.UTF_8);
+                BufferedReader br = new BufferedReader(isr);
+                while(true){
+                    String str = br.readLine();
+                    if(str == null || str.equals("")){
+                        break;
+                    }
+                    result.add(str);
+                }
+                br.close();
+            }
+            
+        } catch (Exception e){
+            System.out.println("Error:" + e);
+        }
+        return result.toArray(new String[0]);
+    }
+
     synchronized void sendFile(byte[] fileNameBytes,byte[] fileContentBytes,String receive){
         for(ClientHandler clientHandler : listClient){
             try{
@@ -98,7 +161,7 @@ public class ClientHandler implements  Runnable{
                     clientHandler.bw.write("SERVER&FILE");
                     clientHandler.bw.newLine();
                     clientHandler.bw.flush();
-                    TimeUnit.SECONDS.sleep(2);
+                    TimeUnit.SECONDS.sleep(1);
 
                     clientHandler.dos.writeInt(fileNameBytes.length);
                     clientHandler.dos.write(fileNameBytes);

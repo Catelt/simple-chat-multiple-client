@@ -22,8 +22,8 @@ public class Client extends javax.swing.JFrame  {
     private BufferedReader br;
     private BufferedWriter bw;
     private DataInputStream dis;
-    private DefaultListModel modelList = new DefaultListModel();
-    private String nameDirectory = "history/";
+    private DefaultListModel<String> modelList = new DefaultListModel<String>();
+    private String nameDirectory = "";
     /**
      * Creates new form Client
      */
@@ -44,19 +44,7 @@ public class Client extends javax.swing.JFrame  {
             System.out.println("Error:" + e);
         }
     }
-    public void setSocket(Socket socket){
-        this.socket = socket;
-    }
 
-    public void connectServer(){
-        try {
-            bw.write(this.sender);
-            bw.newLine();
-            bw.flush();
-        } catch (Exception e) {
-            System.out.println("Error:" + e);
-        }
-    }
 
     public void sendMessenge(String messenger) {
         try {
@@ -67,40 +55,6 @@ public class Client extends javax.swing.JFrame  {
             System.out.println("Error:" + e);
         }
     }
-    public static void saveMessenge(String messenger , String nameFile){
-        try{
-            System.out.println(messenger);
-            FileOutputStream os = new FileOutputStream(nameFile,true);
-            OutputStreamWriter osw = new OutputStreamWriter(os,StandardCharsets.UTF_8);
-            BufferedWriter br = new BufferedWriter(osw);
-            br.append(messenger);
-            br.close();
-        }
-        catch (Exception e){
-            System.out.println("Error:" + e);
-        }
-    }
-
-    public static String loadMessenge(String nameFile){
-        String result = "";
-        try{
-            InputStream is = new FileInputStream(nameFile);
-            InputStreamReader isr = new InputStreamReader(is,StandardCharsets.UTF_8);
-            BufferedReader br = new BufferedReader(isr);
-            while(true){
-                String str = br.readLine();
-                if(str == null || str.equals("")){
-                    break;
-                }
-                result += str + "\n";
-            }
-            br.close();
-        } catch (Exception e){
-            System.out.println("Error:" + e);
-        }
-        return result;
-    }
-
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -150,7 +104,7 @@ public class Client extends javax.swing.JFrame  {
         jPanel3.add(jLabel3);
 
         jLabel5.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
-        jLabel5.setText("Đang chat với:");
+        jLabel5.setText("Chatting:");
         jPanel3.add(jLabel5);
 
         jLabel4.setFont(new java.awt.Font("Tahoma", 0, 12)); // NOI18N
@@ -230,7 +184,7 @@ public class Client extends javax.swing.JFrame  {
         jLabel6.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel6.setText("Online:");
 
-        jLabel7.setText("jLabel7");
+        jLabel7.setText("0");
 
         javax.swing.GroupLayout jPanel5Layout = new javax.swing.GroupLayout(jPanel5);
         jPanel5.setLayout(jPanel5Layout);
@@ -322,8 +276,6 @@ public class Client extends javax.swing.JFrame  {
                 System.out.println("Error:" + e);
             }
 
-
-
         }
     }//GEN-LAST:event_jButton3ActionPerformed
 
@@ -340,7 +292,6 @@ public class Client extends javax.swing.JFrame  {
             bw.flush();
             String messenge = sender + ": " + jTextField3.getText() +"\n";
             jChatArea.append(messenge);
-            Client.saveMessenge(messenge,nameDirectory+sender+"-"+receiver+".txt");
             jTextField3.setText("");
         } catch (Exception e) {
             System.out.println("Error:" + e);
@@ -351,14 +302,15 @@ public class Client extends javax.swing.JFrame  {
         // TODO add your handling code here:
         if(evt.getClickCount()==2){
             int index = jList1.locationToIndex(evt.getPoint());
-            String receiver = (String) modelList.getElementAt(index);
+            String receiver = modelList.getElementAt(index);
             if(receiver.equals(this.sender)){
                 JOptionPane.showMessageDialog(this,"Bạn không chọn chính bản thân được");
             }
             else{
                 this.receiver = receiver;
                 jLabel4.setText(receiver);
-                jChatArea.setText(Client.loadMessenge(nameDirectory+this.sender+"-"+receiver+".txt"));
+                jChatArea.setText("");
+                sendMessenge(this.sender+"-LOAD-FILE:"+nameDirectory+this.sender+"-"+receiver+".txt");
             }
         }
     }//GEN-LAST:event_jList1MouseClicked
@@ -396,7 +348,7 @@ public class Client extends javax.swing.JFrame  {
                                         File fileToDownLoad = new File(filename);
                                         try{
                                             FileOutputStream fos = new FileOutputStream(fileToDownLoad);
-
+                                            
                                             fos.write(fileContentBytes);
                                             JOptionPane.showMessageDialog(null,"Tải thành công");
                                             fos.close();
@@ -416,11 +368,10 @@ public class Client extends javax.swing.JFrame  {
 
                         if(msgFromChat.contains("SERVER-ADD:")){
                             String name = msgFromChat.substring(msgFromChat.indexOf(":")+1);
-
                             jList1.setModel(modelList);
-                            
+                            TimeUnit.MILLISECONDS.sleep(100);
                             modelList.addElement(name);
-                            
+
                             jLabel7.setText(Integer.toString(modelList.getSize()));
 
                         }
@@ -437,9 +388,12 @@ public class Client extends javax.swing.JFrame  {
                             jLabel7.setText(Integer.toString(modelList.getSize()));
 
                         }
+                        else if(msgFromChat.contains("LOADCHAT:")){
+                            String msg = msgFromChat.substring(msgFromChat.indexOf(":")+1);
+                            jChatArea.append(msg+"\n");
+                        }
                         else if (msgFromChat.contains(":")){
                             String name = msgFromChat.substring(0,msgFromChat.indexOf(":"));
-                            Client.saveMessenge(msgFromChat + "\n",nameDirectory+sender+"-"+name+".txt");
                             if(name.equals(receiver)){
                                 jChatArea.append(msgFromChat + "\n");
                             }

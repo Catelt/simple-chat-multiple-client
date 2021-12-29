@@ -1,7 +1,9 @@
 import java.io.*;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
-import javax.swing.JOptionPane;
+import java.util.Timer;
+import javax.swing.*;
 
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
@@ -13,75 +15,99 @@ import javax.swing.JOptionPane;
  * @author hovan
  */
 public class Login extends javax.swing.JFrame {
-
+    private Socket socket;
+    private BufferedReader br;
+    private BufferedWriter bw;
     /**
      * Creates new form Login
      */
-    public Login() {
+    public Login(Socket socket) {
         initComponents();
         this.setResizable(false);
         this.setTitle("Ứng dụng chat chít");
+        try {
+            this.socket = socket;
+            this.br = new BufferedReader(new InputStreamReader(this.socket.getInputStream(),StandardCharsets.UTF_8));
+            this.bw = new BufferedWriter(new OutputStreamWriter(this.socket.getOutputStream(), StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
-    public static void saveAccount(String nameFile,String username, String password){
-        try{
-            BufferedWriter br = new BufferedWriter(new FileWriter(nameFile,true));
-            br.append(username + "|" + password +"\n");
-            br.close();
-        }
-        catch (Exception e){
+    public void sendMessenge(String messenger) {
+        try {
+            bw.write(messenger);
+            bw.newLine();
+            bw.flush();
+        } catch (Exception e) {
             System.out.println("Error:" + e);
         }
     }
 
-    public static Account readLine(String str){
-        Account account = new Account();
-        int index = str.indexOf('|');
-        String user = str.substring(0,index);
-        String pass = str.substring(index + 1);
-        account.setUsername(user);
-        account.setPassword(pass);
-        return account;
-    }
-
-    public static ArrayList<Account> loadAccount(String nameFile){
-        ArrayList<Account> accounts = new ArrayList<Account>();
-        try{
-            BufferedReader br = new BufferedReader(new FileReader(nameFile));
-            while(true){
-                String str = br.readLine();
-                if(str == null || str.equals("")){
-                    break;
-                }
-
-                Account account_new = Login.readLine(str);
-                accounts.add(account_new);
-            }
-            br.close();
-        } catch (Exception e){
+    public void LoginServer(String user,String pass){
+        try {
+            bw.write("LOGIN&"+user+"|"+pass);
+            bw.newLine();
+            bw.flush();
+        } catch (Exception e) {
             System.out.println("Error:" + e);
         }
-        return accounts;
     }
 
-    public static int checkExisting(ArrayList<Account> accounts,String username){
-        for(int i = 0 ; i < accounts.size();i++){
-            if(accounts.get(i).getUsername().contains(username)){
-                return 1;
-            }
+    public void RegisterServer(String user,String pass){
+        try {
+            bw.write("REGISTER:"+user+"|"+pass);
+            bw.newLine();
+            bw.flush();
+        } catch (Exception e) {
+            System.out.println("Error:" + e);
         }
-        return 0;
     }
 
-    public static int checkPassword(ArrayList<Account> accounts,String username,String password){
-        for(int i = 0 ; i < accounts.size();i++){
-            if(accounts.get(i).getUsername().equals(username)){
-                if(accounts.get(i).getPassword().equals(password)){
-                    return 1;
+    public void receive(){
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String msgFromChat;
+                while(!socket.isClosed()){
+                    try{
+                        msgFromChat = br.readLine();
+                        if(msgFromChat.contains("LOGIN-SUCCESS")){
+                            try {
+                                Thread t = Thread.currentThread();
+                                Client client = new Client(jTextField1.getText(),socket);
+                                client.receive();
+                                client.show();
+                                dispose();
+                                t.stop();
+                            } catch (Exception e) {
+                                System.out.println("Error:" + e);
+                            }
+
+                        }
+                        if(msgFromChat.contains("LOGIN-FAIL")) {
+                            JOptionPane.showMessageDialog(null,"Username or password not correct");
+                        }
+                        if(msgFromChat.contains("USER-EXIST")) {
+                            JOptionPane.showMessageDialog(null,"Username have been login");
+                        }
+                        if(msgFromChat.contains("REGIS-EXISTING")){
+                            JOptionPane.showMessageDialog(null,"Usermame has existed");
+                        }
+                        if(msgFromChat.contains("REGIS-SUCCESS")){
+                            JOptionPane.showMessageDialog(null,"Register success");
+                            jPanel1.removeAll();
+                            jPanel1.add(LoginPanel);
+                            jPanel1.repaint();
+                            jPanel1.revalidate();
+                        }
+
+                    }catch (Exception e){
+                        System.out.println("Error:" + e);
+                    }
                 }
             }
-        }
-        return 0;
+        }).start();
     }
 
     /**
@@ -109,6 +135,11 @@ public class Login extends javax.swing.JFrame {
         jTextField3 = new javax.swing.JTextField();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            public void windowClosing(java.awt.event.WindowEvent evt) {
+                Closing(evt);
+            }
+        });
 
         jPanel1.setLayout(new java.awt.CardLayout());
 
@@ -249,23 +280,7 @@ public class Login extends javax.swing.JFrame {
         // TODO add your handling code here:
         String username = jTextField1.getText();
         String password = String.valueOf(jPasswordField1.getPassword());
-        if(Login.checkPassword(Login.loadAccount("account.txt"), username, password) == 1){
-//            JOptionPane.showMessageDialog(this,"Login success");
-            
-            try {
-                Socket socket = new Socket("localhost",1703);
-                Client client = new Client(username,socket);
-                client.connectServer();
-                client.receive();
-                client.show();
-            } catch (Exception e) {
-                System.out.println("Error:" + e);
-            }
-            dispose();
-        }
-        else{
-            JOptionPane.showMessageDialog(this,"Username or password not correct");
-        }
+        LoginServer(username,password);
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
@@ -280,29 +295,32 @@ public class Login extends javax.swing.JFrame {
     private void jButton4ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton4ActionPerformed
         // TODO add your handling code here:
         String username = jTextField2.getText();
-        
-        if(Login.checkExisting(Login.loadAccount("account.txt"), username) == 1){
-            JOptionPane.showMessageDialog(this,"Usermame has existed");
-            return;
-        }
-        else{
-            String password = jTextField3.getText();
-            saveAccount("account.txt",username,password);
-            JOptionPane.showMessageDialog(this,"Register success");
-        }
-        
-        jPanel1.removeAll();
-        jPanel1.add(LoginPanel);
-        jPanel1.repaint();
-        jPanel1.revalidate();
+        String password = jTextField3.getText();
+        RegisterServer(username,password);
     }//GEN-LAST:event_jButton4ActionPerformed
+
+    private void Closing(java.awt.event.WindowEvent evt) {//GEN-FIRST:event_Closing
+        // TODO add your handling code here:
+        sendMessenge("@OFF");
+        try{
+            if(bw != null){
+                bw.close();;
+            }
+            if(br != null){
+                br.close();;
+            }
+        }catch (IOException e){
+            System.out.println("Error:" + e);
+        }
+
+    }//GEN-LAST:event_Closing
 
 
 
     /**
      * @param args the command line arguments
      */
-    public static void main(String args[]) {
+    public static void main(String args[]) throws IOException {
         /* Set the Nimbus look and feel */
         //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
         /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
@@ -325,11 +343,13 @@ public class Login extends javax.swing.JFrame {
             java.util.logging.Logger.getLogger(Login.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
         //</editor-fold>
-
+        Socket socket = new Socket("localhost",1703);
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new Login().setVisible(true);
+                Login login = new Login(socket);
+                login.setVisible(true);
+                login.receive();
             }
         });
     }
